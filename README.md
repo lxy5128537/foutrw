@@ -27,5 +27,4 @@ docker run -e COUNTRY=JP -p 8080:8080 foutrw
 | `COUNTRY` | (none) | VPN node country code (JP/KR/US) |
 | `SOCKS_PORT` | `10000` | fout SOCKS5 listen port |
 | `XAPP_PORT` | `8080` | xapp WSS listen port |
-| `TOKEN` | `Ymj5128537` | xapp auth token |
 | `LOG` | (none) | Set `1` for verbose logging |
