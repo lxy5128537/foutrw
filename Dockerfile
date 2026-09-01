@@ -6,15 +6,15 @@ FROM golang:1.23-bookworm AS builder
 WORKDIR /src
 
 # 构建 xapp
-COPY go.mod go.sum ./xapp/
-COPY xapp.go process_linux.go process_other.go embed.go dlxapp.html ./xapp/
-RUN cd xapp && go mod download && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags "-w -s" -o /out/xapp .
+COPY go.mod go.sum ./
+COPY xapp.go process_linux.go process_other.go embed.go dlxapp.html ./
+RUN go mod download && CGO_ENABLED=0 go build \
+    -trimpath -ldflags "-w -s" -o /out/xapp .
 
 # 构建 fout
 COPY fanout/ ./fanout/
-RUN cd fanout && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags "-w -s" -o /out/fout .
+RUN cd fanout && CGO_ENABLED=0 go build \
+    -trimpath -ldflags "-w -s" -o /out/fout .
 
 # === 阶段2: 运行时 ===
 FROM debian:bookworm-slim
