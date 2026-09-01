@@ -20,7 +20,7 @@ func prepareHost() error {
 
 	// 1. 检查 /dev/net/tun
 	if err := checkTunDevice(); err != nil {
-		return err
+		log.Printf("警告: %v (VPN隧道不可用，将运行在直连模式)", err)
 	}
 
 	// 3. 检查必需命令
