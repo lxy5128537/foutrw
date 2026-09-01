@@ -59,6 +59,16 @@ func (t *Tunnel) setupNetns() error {
 
 	t.teardownNetns()
 
+	if *natMode {
+		// NAT 容器模式：netns 由 openvpn 子进程创建并持有（见 startOpenVPN），
+		// 这里只负责 iptables 放行规则；veth 在 openvpn 启动后配置（natSetupVeth）。
+		cidr := sub + ".0/30"
+		ensureRule("nat", "POSTROUTING", "-s", cidr, "-j", "MASQUERADE")
+		ensureRuleInsert("filter", "FORWARD", "-s", cidr, "-j", "ACCEPT")
+		ensureRuleInsert("filter", "FORWARD", "-d", cidr, "-j", "ACCEPT")
+		return nil
+	}
+
 	// 确保文件不存在，避免 ip netns add 的 O_EXCL 失败
 	runQuiet("rm", "-f", fmt.Sprintf("/run/netns/%s", ns))
 
@@ -145,6 +155,13 @@ func deleteRule(table, chain string, spec ...string) {
 func (t *Tunnel) teardownNetns() {
 	ns, sub := t.nsName(), t.subnet()
 	cidr := sub + ".0/30"
+
+	if *natMode {
+		// NAT 容器模式：无 netns 文件/挂载可清理，netns 由内核随进程退出回收。
+		t.natTeardown()
+		return
+	}
+
 	// 先杀 openvpn（如果还在跑），等待退出，再删 netns
 	if t.ovpn != nil && t.ovpn.Process != nil {
 		_ = t.ovpn.Process.Kill()
@@ -205,36 +222,64 @@ func (t *Tunnel) teardownNetns() {
 func (t *Tunnel) startOpenVPN() error {
 	ns := t.nsName()
 	cfgPath := filepath.Join(t.workDir, ns+".ovpn")
-	if err := os.WriteFile(cfgPath, []byte(t.Node.Config), 0600); err != nil {
-		return fmt.Errorf("写配置失败: %w", err)
-	}
 	authPath := filepath.Join(t.workDir, "auth.txt")
 	if err := os.WriteFile(authPath, []byte("vpn\nvpn\n"), 0600); err != nil {
 		return fmt.Errorf("写凭据失败: %w", err)
 	}
 
 	logPath := filepath.Join(t.workDir, ns+".log")
-	cmd := exec.Command("ip", "netns", "exec", ns, "openvpn",
-		"--config", cfgPath,
-		"--auth-user-pass", authPath,
-		"--auth-nocache",
-		"--dev", "tun0",
-		"--connect-retry-max", "3",
-		"--connect-timeout", "10",
-		"--data-ciphers", "AES-128-CBC:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305",
-		"--verb", "3",
-		"--log", logPath,
-	)
+
+	var cmd *exec.Cmd
+	if *natMode {
+		// 容器模式：openvpn 直接在容器网络命名空间内运行（Docker 容器本身就是隔离的 netns）。
+		// 不需要 CLONE_NEWNET（seccomp 可能拦截），也不需要 ip netns / veth。
+		if err := os.WriteFile(cfgPath, []byte(natPreResolve(t.Node.Config)), 0600); err != nil {
+			return fmt.Errorf("写配置失败: %w", err)
+		}
+		cmd = exec.Command("openvpn",
+			"--config", cfgPath,
+			"--auth-user-pass", authPath,
+			"--auth-nocache",
+			"--dev", "tun0",
+			"--connect-retry-max", "3",
+			"--connect-timeout", "10",
+			"--data-ciphers", "AES-128-CBC:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305",
+			"--verb", "3",
+			"--log", logPath,
+		)
+		// 不设 CLONE_NEWNET：容器已有独立 netns，openvpn 直接在其中运行
+	} else {
+		if err := os.WriteFile(cfgPath, []byte(t.Node.Config), 0600); err != nil {
+			return fmt.Errorf("写配置失败: %w", err)
+		}
+		cmd = exec.Command("ip", "netns", "exec", ns, "openvpn",
+			"--config", cfgPath,
+			"--auth-user-pass", authPath,
+			"--auth-nocache",
+			"--dev", "tun0",
+			"--connect-retry-max", "3",
+			"--connect-timeout", "10",
+			"--data-ciphers", "AES-128-CBC:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305",
+			"--verb", "3",
+			"--log", logPath,
+		)
+	}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("启动 openvpn 失败: %w", err)
 	}
 	t.ovpn = cmd
 	go cmd.Wait() // 回收子进程，避免僵尸
 
+	if *natMode {
+		// nat 容器模式：openvpn 直接在容器 netns 内运行（无 CLONE_NEWNET），
+		// tun0 直接在容器 netns 中创建，无需 veth 桥接。
+		// 只需等待 tun0 就绪即可。
+	}
+
 	// openvpn 建好 tun0 前无法出网，这里等它就绪（10 秒超时，节点不行就换下一个）
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		if out, err := exec.Command("ip", "netns", "exec", ns, "ip", "-4", "addr", "show", "tun0").Output(); err == nil {
+		if out, err := t.nsExecCmd("ip", "-4", "addr", "show", "tun0").Output(); err == nil {
 			if strings.Contains(string(out), "inet ") {
 				return nil
 			}
@@ -252,7 +297,7 @@ func (t *Tunnel) startOpenVPN() error {
 func (t *Tunnel) probeExitIP() (string, error) {
 	// 等待几秒让隧道稳定，防止路由推送延迟
 	time.Sleep(3 * time.Second)
-	ip, err := tryIPCheckURLs(t.nsName(), probeIPURLs)
+	ip, err := tryIPCheckURLs(t, probeIPURLs)
 	if err != nil {
 		return "", fmt.Errorf("查询出口 IP 失败: %w", err)
 	}
@@ -271,10 +316,10 @@ var probeIPURLs = []string{
 }
 
 // tryIPCheckURLs 依次尝试多个出口 IP 检测 URL，返回第一个解析到的合法 IP。
-func tryIPCheckURLs(ns string, urls []string) (string, error) {
+func tryIPCheckURLs(t *Tunnel, urls []string) (string, error) {
 	var lastErr error
 	for _, u := range urls {
-		out, err := exec.Command("ip", "netns", "exec", ns,
+		out, err := t.nsExecCmd(
 			"curl", "-s", "--max-time", "10", u).Output()
 		if err != nil {
 			lastErr = err
@@ -293,8 +338,42 @@ func tryIPCheckURLs(ns string, urls []string) (string, error) {
 		}
 		lastErr = fmt.Errorf("%s 返回: %q", u, ip)
 	}
+	// nat 模式兜底：隧道内 DNS 不可用时（无 /etc/netns 注入手段），
+	// 用预解析的 IP 直连 HTTP 请求（Host 头伪装域名），仍能拿到真实出口。
+	if *natMode {
+		for _, h := range ipProbeFallbackHosts {
+			ips, err := net.LookupIP(h)
+			if err != nil || len(ips) == 0 {
+				continue
+			}
+			var ip4 string
+			for _, a := range ips {
+				if a.To4() != nil {
+					ip4 = a.String()
+					break
+				}
+			}
+			if ip4 == "" {
+				continue
+			}
+			out, err := t.nsExecCmd("curl", "-s", "--max-time", "12",
+				"-H", "Host: "+h, "http://"+ip4+"/").Output()
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			ip := strings.TrimSpace(string(out))
+			if net.ParseIP(ip) != nil {
+				return ip, nil
+			}
+			lastErr = fmt.Errorf("%s(IP直连) 返回: %q", h, ip)
+		}
+	}
 	return "", fmt.Errorf("所有出口 IP 检测源均失败，最后一个: %w", lastErr)
 }
+
+// ipProbeFallbackHosts nat 模式 DNS 兜底用的检测站域名（宿主侧预解析）。
+var ipProbeFallbackHosts = []string{"api.ipify.org", "ip.sb", "ifconfig.me"}
 
 // healthMismatchThreshold 连续出口探测失配阈值：只有连续多次不一致才判定
 // 隧道不健康，单次探测抖动/被墙不会触发切换，避免出口 IP 频繁跳变(风控友好)。

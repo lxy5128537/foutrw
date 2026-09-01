@@ -49,8 +49,10 @@ func prepareHost() error {
 		}
 	}
 
-	// 4. 开启 ip_forward
-	if err := exec.Command("sysctl", "-qw", "net.ipv4.ip_forward=1").Run(); err != nil {
+	// 4. 开启 ip_forward（如果尚未开启）
+	if val, err := os.ReadFile("/proc/sys/net/ipv4/ip_forward"); err == nil && strings.TrimSpace(string(val)) == "1" {
+		log.Printf("ip_forward 已开启，跳过 sysctl")
+	} else if err := exec.Command("sysctl", "-qw", "net.ipv4.ip_forward=1").Run(); err != nil {
 		return fmt.Errorf("开启 ip_forward 失败: %w\n  → 检查容器是否允许修改内核参数（--privileged 或 --cap-add=NET_ADMIN,SYSCTL）", err)
 	}
 

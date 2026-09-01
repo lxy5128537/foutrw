@@ -18,6 +18,7 @@ var country = flag.String("c", "", "VPN 节点国家代码（如 JP/KR/US，为�
 var daemon = flag.Bool("d", false, "Daemon 模式：不监控父进程，避免开机脚本/SSH 断开时退出")
 var geoOverride = flag.String("geo-override", "", "运行环境覆盖: cn / overseas（默认自动探测）")
 var mirrorURL = flag.String("mirror", "", "VPN Gate 节点列表 JSON 镜像 URL（默认内置，也可用 FANOUT_MIRROR 环境变量指定）")
+var natMode = flag.Bool("nat", false, "NAT 容器模式：无 mount 权限的环境用 fork+CLONE_NEWNET/nsenter 替代 ip netns")
 
 func main() {
 	flag.Parse()

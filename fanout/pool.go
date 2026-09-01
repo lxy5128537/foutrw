@@ -59,7 +59,14 @@ func (p *TunnelPool) Init() error {
 	p.active = t1
 	log.Printf("主隧道出口 IP: %s", t1.ExitIP)
 
-	// 备用隧道异步拉起：失败不影响主隧道和 SOCKS5
+	// 备用隧道异步拉起：失败不影响主隧道和 SOCKS5。
+	// nat 容器模式跳过：pids.max=50 的精简容器撑不住双隧道
+	// （Go runtime 线程 + openvpn + curl 会撞上限导致 fatal newosproc），
+	// 单隧道运行，故障切换由 WatchHealth 重建主隧道承担。
+	if *natMode {
+		log.Printf("nat 模式: 跳过备用隧道（pids 受限，单隧道运行）")
+		return nil
+	}
 	go func() {
 		t2, err := p.startTunnel(2)
 		if err != nil {
@@ -344,7 +351,13 @@ func (p *TunnelPool) GetActiveDialer() func(string, string) (net.Conn, error) {
 	if p.active == nil || p.active.Status != "up" {
 		return nil
 	}
-	return dialerInNetns(p.active.nsName())
+	// nat 容器模式：openvpn 在容器同一 netns 内运行，直接拨号即可（tun0 已接管路由）
+	if *natMode {
+		return func(network, addr string) (net.Conn, error) {
+			return net.DialTimeout(network, addr, 15*time.Second)
+		}
+	}
+	return dialerInNetns("/var/run/netns/" + p.active.nsName())
 }
 
 // SwitchToStandby 把备用隧道提升为主隧道，原主隧道降为备用。
