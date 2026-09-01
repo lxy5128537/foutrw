@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Navigator · AI Directory</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  color: #e8e8f0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  text-align: center;
+  padding: 44px 20px 28px;
+  position: relative;
+}
+.lang-switch {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.lang-switch button {
+  background: rgba(255,255,255,0.10);
+  color: #e8e8f0;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.lang-switch button:hover { background: rgba(122,92,255,0.3); }
+.lang-switch button.active {
+  background: linear-gradient(90deg, #00d2ff, #7a5cff);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+header h1 {
+  font-size: 2.3rem;
+  background: linear-gradient(90deg, #00d2ff, #7a5cff, #ff6b6b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 12px;
+}
+header p { color: #a9a9c9; font-size: 1.05rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px 50px; width: 100%; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+.card {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  padding: 18px;
+  text-decoration: none;
+  color: #e8e8f0;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.card:hover {
+  transform: translateY(-4px);
+  border-color: #7a5cff;
+  box-shadow: 0 8px 30px rgba(122,92,255,0.25);
+}
+.card-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  background: #2a2a4a;
+}
+.card-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.card-info { min-width: 0; }
+.card .name { font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.card .name .tag { font-size: .7rem; padding: 2px 8px; border-radius: 999px; background: rgba(122,92,255,0.2); color: #c4b5ff; white-space: nowrap; }
+.card .desc { font-size: .85rem; color: #a9a9c9; line-height: 1.45; margin-top: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="lang-switch">
+    <button id="lang-en" class="active" onclick="setLang('en')">EN</button>
+    <button id="lang-zh" onclick="setLang('zh')">中文</button>
+  </div>
+  <h1 data-en="AI Navigator" data-zh="AI 导航">AI Navigator</h1>
+  <p data-en="Curated mainstream AI tools · One-click access" data-zh="主流人工智能工具精选 · 一站直达">Curated mainstream AI tools · One-click access</p>
+</header>
+
+<main class="container">
+  <div class="grid" id="grid">
+    <!-- 卡片由 JS 渲染（含双语 + logo）-->
+  </div>
+</main>
+
+<script>
+// 数据：每项含 name_zh, name_en, desc_zh, desc_en, url, tag_zh, tag_en, brandColor
+const TOOLS = [
+  // ---------- 对话 / 大模型 ----------
+  { name_zh:"ChatGPT", name_en:"ChatGPT", desc_zh:"OpenAI 旗舰对话模型，多模态推理，插件生态丰富。", desc_en:"OpenAI's flagship conversational AI with multimodal reasoning and rich plugins.", url:"https://chat.openai.com", tag_zh:"对话", tag_en:"Chat", brand:"#10a37f" },
+  { name_zh:"Gemini", name_en:"Gemini", desc_zh:"Google AI，深度集成 Workspace，长上下文多模态。", desc_en:"Google AI, deeply integrated with Workspace, long-context multimodal.", url:"https://gemini.google.com", tag_zh:"对话", tag_en:"Chat", brand:"#4285f4" },
+  { name_zh:"Claude", name_en:"Claude", desc_zh:"Anthropic 出品，长文写作与代码能力出色。", desc_en:"Built by Anthropic, excels at long-form writing and coding.", url:"https://claude.ai", tag_zh:"对话", tag_en:"Chat", brand:"#d97757" },
+  { name_zh:"Grok", name_en:"Grok", desc_zh:"xAI 出品，实时信息接入 X，风格直率。", desc_en:"By xAI, real-time X integration with a direct style.", url:"https://grok.com", tag_zh:"对话", tag_en:"Chat", brand:"#000000" },
+  { name_zh:"Meta AI", name_en:"Meta AI", desc_zh:"Meta Llama 系列，开源模型与多模态。", desc_en:"Meta Llama family, open-source models and multimodal.", url:"https://www.meta.ai", tag_zh:"对话", tag_en:"Chat", brand:"#0081fb" },
+  { name_zh:"DeepSeek", name_en:"DeepSeek", desc_zh:"国产开源大模型，推理与编程表现优秀。", desc_en:"Open-source LLM with strong reasoning and coding performance.", url:"https://www.deepseek.com", tag_zh:"对话", tag_en:"Chat", brand:"#4d6bfe" },
+  { name_zh:"Kimi", name_en:"Kimi", desc_zh:"月之暗面，超长上下文中文对话助手。", desc_en:"Moonshot AI, long-context Chinese conversational assistant.", url:"https://kimi.moonshot.cn", tag_zh:"对话", tag_en:"Chat", brand:"#00cfe8" },
+  { name_zh:"豆包", name_en:"Doubao", desc_zh:"字节跳动，年轻化多模态助手。", desc_en:"ByteDance, youthful multimodal assistant.", url:"https://www.doubao.com", tag_zh:"对话", tag_en:"Chat", brand:"#325ab4" },
+  { name_zh:"通义千问", name_en:"Qwen", desc_zh:"阿里巴巴大模型，办公创作应用丰富。", desc_en:"Alibaba LLM, rich in office and creation apps.", url:"https://tongyi.aliyun.com", tag_zh:"对话", tag_en:"Chat", brand:"#615ced" },
+  { name_zh:"智谱清言", name_en:"GLM", desc_zh:"智谱 AI，GLM 系列，中文能力强。", desc_en:"Zhipu AI, GLM series, strong Chinese capability.", url:"https://chatglm.cn", tag_zh:"对话", tag_en:"Chat", brand:"#3859ff" },
+  { name_zh:"文心一言", name_en:"ERNIE Bot", desc_zh:"百度大模型，中文理解与知识问答。", desc_en:"Baidu LLM, Chinese understanding and knowledge QA.", url:"https://yiyan.baidu.com", tag_zh:"对话", tag_en:"Chat", brand:"#2932e1" },
+  { name_zh:"腾讯元宝", name_en:"Yuanbao", desc_zh:"腾讯基于混元大模型的 AI 助手。", desc_en:"Tencent AI assistant based on Hunyuan.", url:"https://yuanbao.tencent.com", tag_zh:"对话", tag_en:"Chat", brand:"#0d7bff" },
+  { name_zh:"讯飞星火", name_en:"Spark", desc_zh:"科大讯飞大模型，语音与中文能力突出。", desc_en:"iFlytek LLM, strong in speech and Chinese.", url:"https://xinghuo.xfyun.cn", tag_zh:"对话", tag_en:"Chat", brand:"#044bfc" },
+  { name_zh:"Mistral", name_en:"Mistral", desc_zh:"欧洲开源模型，性能与效率平衡。", desc_en:"European open-source models, balanced performance and efficiency.", url:"https://chat.mistral.ai", tag_zh:"对话", tag_en:"Chat", brand:"#e8733f" },
+
+  // ---------- 编程 ----------
+  { name_zh:"GitHub Copilot", name_en:"GitHub Copilot", desc_zh:"AI 结对编程，实时代码补全与建议。", desc_en:"AI pair programmer with real-time code completion.", url:"https://github.com/copilot", tag_zh:"编程", tag_en:"Coding", brand:"#24292f" },
+  { name_zh:"Cursor", name_en:"Cursor", desc_zh:"AI 原生代码编辑器，智能代码生成。", desc_en:"AI-native code editor with intelligent code generation.", url:"https://cursor.com", tag_zh:"编程", tag_en:"Coding", brand:"#4f46e5" },
+  { name_zh:"Windsurf", name_en:"Windsurf", desc_zh:"Codeium 出品，Agentic 编程环境。", desc_en:"By Codeium, an agentic coding environment.", url:"https://windsurf.com", tag_zh:"编程", tag_en:"Coding", brand:"#6b7ef5" },
+  { name_zh:"Replit", name_en:"Replit", desc_zh:"云端 IDE，AI 辅助构建与部署。", desc_en:"Cloud IDE with AI-assisted build and deploy.", url:"https://replit.com", tag_zh:"编程", tag_en:"Coding", brand:"#f26207" },
+
+  // ---------- 绘画 / 图像 ----------
+  { name_zh:"Midjourney", name_en:"Midjourney", desc_zh:"顶级 AI 图像生成，艺术风格出众。", desc_en:"Top-tier AI image generation with artistic flair.", url:"https://midjourney.com", tag_zh:"绘画", tag_en:"Art", brand:"#000000" },
+  { name_zh:"Stable Diffusion", name_en:"Stable Diffusion", desc_zh:"开源文生图，生态庞大可控性强。", desc_en:"Open-source text-to-image with a vast ecosystem.", url:"https://stability.ai", tag_zh:"绘画", tag_en:"Art", brand:"#a64ac9" },
+  { name_zh:"即梦 AI", name_en:"Dreamina", desc_zh:"剪映/字节文生图，风格多样。", desc_en:"CapCut/ByteDance text-to-image with diverse styles.", url:"https://jimeng.jianying.com", tag_zh:"绘画", tag_en:"Art", brand:"#4a2ff0" },
+  { name_zh:"Flux", name_en:"Flux", desc_zh:"Black Forest Labs，高质量文生图模型。", desc_en:"Black Forest Labs, high-quality text-to-image.", url:"https://flux-pro.art", tag_zh:"绘画", tag_en:"Art", brand:"#d97706" },
+
+  // ---------- 视频 ----------
+  { name_zh:"Sora", name_en:"Sora", desc_zh:"OpenAI 文本生视频，画面品质一流。", desc_en:"OpenAI text-to-video with premium quality.", url:"https://openai.com/sora", tag_zh:"视频", tag_en:"Video", brand:"#10a37f" },
+  { name_zh:"Runway", name_en:"Runway", desc_zh:"AI 视频生成与编辑，创意工具集。", desc_en:"AI video generation and editing toolkit.", url:"https://runwayml.com", tag_zh:"视频", tag_en:"Video", brand:"#000000" },
+  { name_zh:"Luma", name_en:"Luma AI", desc_zh:"Dream Machine，视频与 3D 生成。", desc_en:"Dream Machine for video and 3D generation.", url:"https://lumalabs.ai", tag_zh:"视频", tag_en:"Video", brand:"#5b60ff" },
+  { name_zh:"Vidu", name_en:"Vidu", desc_zh:"生数科技视频生成，动态效果佳。", desc_en:"Shengshu video generation with strong motion.", url:"https://www.vidu.cn", tag_zh:"视频", tag_en:"Video", brand:"#7540e1" },
+
+  // ---------- 音乐 / 语音 ----------
+  { name_zh:"Suno", name_en:"Suno", desc_zh:"AI 音乐生成，写词谱曲即出。", desc_en:"AI music generation from lyrics to full tracks.", url:"https://suno.com", tag_zh:"音乐", tag_en:"Music", brand:"#b834ff" },
+  { name_zh:"Udio", name_en:"Udio", desc_zh:"高质量 AI 音乐创作平台。", desc_en:"High-quality AI music creation platform.", url:"https://www.udio.com", tag_zh:"音乐", tag_en:"Music", brand:"#9747ff" },
+  { name_zh:"ElevenLabs", name_en:"ElevenLabs", desc_zh:"顶级 AI 语音合成与克隆。", desc_en:"Premium AI voice synthesis and cloning.", url:"https://elevenlabs.io", tag_zh:"语音", tag_en:"Voice", brand:"#111827" },
+
+  // ---------- 搜索 ----------
+  { name_zh:"Perplexity", name_en:"Perplexity", desc_zh:"AI 搜索引擎，实时信息 + 溯源回答。", desc_en:"AI search engine with real-time, cited answers.", url:"https://www.perplexity.ai", tag_zh:"搜索", tag_en:"Search", brand:"#20808d" },
+  { name_zh:"NotebookLM", name_en:"NotebookLM", desc_zh:"Google 文档分析，生成摘要与播客。", desc_en:"Google document analysis generates summaries and podcasts.", url:"https://notebooklm.google.com", tag_zh:"效率", tag_en:"Productivity", brand:"#4285f4" },
+
+  // ---------- AI 中转站 / 聚合 API ----------
+  { name_zh:"OpenRouter", name_en:"OpenRouter", desc_zh:"聚合数百模型 API，统一计费与路由。", desc_en:"Aggregates hundreds of model APIs with unified billing and routing.", url:"https://openrouter.ai", tag_zh:"中转站", tag_en:"Relay", brand:"#6f4bff" },
+  { name_zh:"Poe", name_en:"Poe", desc_zh:"Quora 聚合平台，一站体验多模型。", desc_en:"Quora's aggregation platform for many models.", url:"https://poe.com", tag_zh:"中转站", tag_en:"Relay", brand:"#578ddd" },
+  { name_zh:"Groq", name_en:"Groq", desc_zh:"极速推理 API，Llama 等模型高速响应。", desc_en:"Blazing-fast inference API for Llama and more.", url:"https://groq.com", tag_zh:"API", tag_en:"API", brand:"#f55036" },
+  { name_zh:"Together AI", name_en:"Together AI", desc_zh:"开源模型托管与推理 API。", desc_en:"Open-source model hosting and inference API.", url:"https://www.together.ai", tag_zh:"API", tag_en:"API", brand:"#6b5af1" },
+  { name_zh:"DeepInfra", name_en:"DeepInfra", desc_zh:"低成本 GPU 推理与模型托管。", desc_en:"Low-cost GPU inference and model hosting.", url:"https://deepinfra.com", tag_zh:"API", tag_en:"API", brand:"#9333ea" },
+  { name_zh:"Fireworks AI", name_en:"Fireworks AI", desc_zh:"开源模型高速推理 API。", desc_en:"High-speed open-source model inference API.", url:"https://fireworks.ai", tag_zh:"API", tag_en:"API", brand:"#4338ca" },
+  { name_zh:"硅基流动", name_en:"SiliconFlow", desc_zh:"国产模型推理与部署平台。", desc_en:"Domestic model inference and deployment platform.", url:"https://siliconflow.cn", tag_zh:"API", tag_en:"API", brand:"#5b4de0" },
+  { name_zh:"NanoGPT", name_en:"NanoGPT", desc_zh:"低成本 GPT 类 API 中转服务。", desc_en:"Low-cost GPT-style API relay service.", url:"https://nanogpt.com", tag_zh:"中转站", tag_en:"Relay", brand:"#111827" },
+];
+
+let currentLang = 'en';
+
+function brandInitial(t) {
+  const name = currentLang === 'zh' ? t.name_zh : t.name_en;
+  return (name[0] || '?').toUpperCase();
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = TOOLS.map(t => {
+    const name = currentLang === 'zh' ? t.name_zh : t.name_en;
+    const desc = currentLang === 'zh' ? t.desc_zh : t.desc_en;
+    const tag = currentLang === 'zh' ? t.tag_zh : t.tag_en;
+    const domain = new URL(t.url).hostname;
+    return `
+      <a class="card" href="${t.url}" target="_blank" rel="noopener">
+        <div class="card-logo" style="background:${t.brand}">
+          <img src="https://www.google.com/s2/favicons?domain=${domain}&sz=128"
+               onerror="this.style.display='none';this.nextSibling.style.display='flex'"
+               alt=""/>
+          <span style="display:none">${brandInitial(t)}</span>
+        </div>
+        <div class="card-info">
+          <div class="name">${name}<span class="tag">${tag}</span></div>
+          <div class="desc">${desc}</div>
+        </div>
+      </a>
+    `;
+  }).join('');
+}
+
+function applyTexts() {
+  document.documentElement.lang = currentLang;
+  document.querySelectorAll('[data-en], [data-zh]').forEach(el => {
+    const val = el.getAttribute(currentLang === 'zh' ? 'data-zh' : 'data-en');
+    if (val) el.textContent = val;
+  });
+  document.getElementById('lang-en').classList.toggle('active', currentLang === 'en');
+  document.getElementById('lang-zh').classList.toggle('active', currentLang === 'zh');
+  render();
+}
+
+function setLang(lang) {
+  currentLang = lang;
+  applyTexts();
+}
+
+// 初始渲染：支持 ?lang=zh 直接指定语言
+(function init() {
+  const sp = new URLSearchParams(location.search);
+  currentLang = (sp.get('lang') === 'zh') ? 'zh' : 'en';
+  applyTexts();
+})();
+</script>
+</body>
+</html>

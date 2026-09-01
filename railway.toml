@@ -1,0 +1,4 @@
+[deploy]
+startCommand = "fout -nat -c $COUNTRY"
+healthcheckPath = "/"
+healthcheckTimeout = 30
